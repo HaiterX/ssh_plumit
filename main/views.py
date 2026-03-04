@@ -5,16 +5,46 @@ from dotenv import load_dotenv
 
 from django.shortcuts import render, get_object_or_404
 from .models import Case
+from django.db.models import Case as DCase, When, Value, IntegerField
+from collections import defaultdict
+
+
+home_cases = (
+    Case.objects.filter(is_published=True, show_on_home=True)
+    .annotate(
+        home_sort=DCase(
+            When(home_position__in=[1, 2, 3], then="home_position"),
+            default=Value(99),
+            output_field=IntegerField(),
+        )
+    )
+    .order_by("home_sort", "created_at")
+)
 
 
 def index(request):
-    return render(request, 'index.html')
+    home_cases = (
+        Case.objects.filter(is_published=True, show_on_home=True)
+        .order_by("home_position", "created_at")
+    )
+    return render(request, "index.html", {"home_cases": home_cases})
 
 def services(request):
     return render(request, 'services.html')
 
 def works(request):
-    return render(request, 'our-works.html')
+    qs = (
+        Case.objects.filter(is_published=True, show_on_works=True, works_position__in=[1, 2, 3])
+        .order_by("works_block", "works_position", "created_at")
+    )
+
+    buckets = defaultdict(list)
+    for c in qs:
+        buckets[c.works_block].append(c)
+
+    works_blocks = [buckets[k] for k in sorted(buckets.keys())]
+
+    return render(request, "our-works.html", {"works_blocks": works_blocks})
 
 def techimpuls(request):
     return render(request, 'techimpuls.html')
@@ -31,9 +61,6 @@ def bookingrent(request):
 def sdelkipro(request):
     return render(request, "sdelkipro.html")
 
-def works(request):
-    cases = Case.objects.filter(is_published=True).prefetch_related("images").order_by("created_at")
-    return render(request, "our-works.html", {"cases": cases})
 
 def case_detail(request, slug):
     case = get_object_or_404(Case.objects.prefetch_related("images"), slug=slug, is_published=True)
